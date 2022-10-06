@@ -2,10 +2,8 @@ package main
 
 import (
 	"database/sql"
-	"errors"
 	"flag"
 	"fmt"
-	"log"
 	"math/rand"
 	"os"
 	"strings"
@@ -36,37 +34,30 @@ func init() {
 
 func main() {
 	// connect to database and create required tables
-	err := ConnectToDB()
-	if err != nil {
-		log.Fatal(err)
-	}
+	ConnectToDB()
 
-	// generate pass will create a unique password for us and store it in the database
-	password, err := GeneratePass(lengte)
-	if err != nil {
-		log.Fatal(err)
-	}
-	println(password)
+	// create required tables if they do not yet exist
+	CreateTable()
+
+	// generate password will create a unique password for us and store it in the database
+	GeneratePass(lengte)
 }
 
-func (cfg *config) GetConfig() *config {
-	conf, err := os.ReadFile("conf.yml")
+func (cfg *config) GetConfig() {
+	yamlFileName := "conf.yml"
+
+	conf, err := os.ReadFile(yamlFileName)
 	if err != nil {
-		log.Printf("yamlFile.Get err   #%v ", err)
+		panic("Failed to read configuration from " + yamlFileName)
 	}
 
 	err = yaml.Unmarshal([]byte(conf), &cfg)
 	if err != nil {
-		log.Printf("yamlFile.Get err   #%v ", err)
+		panic("Could not bind data to Config struct")
 	}
-	return cfg
 }
 
-func GeneratePass(lengte int) (string, error) {
-	if lengte <= 0 {
-		return "", errors.New("Length of password can't be 0")
-	}
-
+func GeneratePass(lengte int) {
 	var password string
 
 	// build string of to-be-used characters based on the user supplied flags (-g & -t)
@@ -89,72 +80,59 @@ func GeneratePass(lengte int) (string, error) {
 	//password = "tmpfgrxu"
 
 	// recursion
-	exists, err := CheckForExistingPass(password)
-	if err != nil {
-		return "", err
-	}
+	exists := CheckForExistingPass(password)
 	if exists {
-		return GeneratePass(lengte)
+		GeneratePass(lengte)
 	}
 
 	// if the password does not exist yet in the database we add it
-	err = AddPass(password)
-	if err != nil {
-		return "", err
-	}
-	return password, nil
+	AddPass(password)
+	println("Password created: " + password)
 }
 
-func ConnectToDB() error {
+func ConnectToDB() {
 	var c config
 	c.GetConfig()
 
 	// checking database credentials for empty values
 	if IsEmpty(c.Dbname) || IsEmpty(c.Dbpass) || IsEmpty(c.Dbuser) {
-		return errors.New("Database credentials were not supplied correctly")
+		panic("Database credentials were not supplied correctly")
 	}
+
 	// open connection to database
 	db, err := sql.Open("postgres", "dbname="+c.Dbname+" user="+c.Dbuser+" password="+c.Dbpass+" sslmode=disable")
 	if err != nil {
-		return errors.New("Connection to the database could not be established")
+		panic("Connection to the database could not be established")
 	}
 	database = db
-
-	// create required tables if they do not yet exist
-	if err := CreateTable(); err != nil {
-		return err
-	}
-	return nil
 }
 
-func CreateTable() error {
+func CreateTable() {
 	query := `CREATE TABLE IF NOT EXISTS passwords (password varchar(255))`
 	_, err := database.Exec(query)
 	if err != nil {
-		return errors.New("An error occured while creating your table")
+		panic("An error occured while creating your table")
 	}
-	return nil
 }
 
-func CheckForExistingPass(password string) (bool, error) {
+func CheckForExistingPass(password string) bool {
 	var exists bool
 	query := fmt.Sprintf(`SELECT EXISTS(SELECT 1 FROM passwords WHERE password = '%s')`, password)
 
 	// execute query and bind assign boolean return value to the "exists" variable
 	err := database.QueryRow(query).Scan(&exists)
 	if err != nil {
-		return exists, errors.New("An error occured while saving your password to the database")
+		panic("An error occured while saving your password to the database")
 	}
-	return exists, nil
+	return exists
 }
 
-func AddPass(password string) error {
+func AddPass(password string) {
 	query := fmt.Sprintf(`INSERT INTO passwords (password)VALUES ('%s')`, password)
 	_, err := database.Exec(query)
 	if err != nil {
-		return errors.New("An error occured while saving your password to the database")
+		panic("An error occured while saving your password to the database")
 	}
-	return nil
 }
 
 func IsEmpty(textValue string) bool {
