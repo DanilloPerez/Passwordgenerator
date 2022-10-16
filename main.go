@@ -65,15 +65,15 @@ func (cfg *config) GetConfig() {
 	}
 }
 
-func GeneratePass(lengte int) {
+func GeneratePass(lengte int) error {
 	var password string
 
 	// build string of to-be-used characters based on the user supplied flags (-g & -t)
 	characters := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-	if specialCharacters == true {
+	if specialCharacters {
 		characters += "+-()=!#$%^&"
 	}
-	if getallen == true {
+	if getallen {
 		characters += "1234567890"
 	}
 
@@ -93,8 +93,12 @@ func GeneratePass(lengte int) {
 		GeneratePass(lengte)
 	}
 	// if the password does not exist yet in the database we add it
-	AddPass(password)
+	err := AddPass(password)
+	if err != nil {
+		return err
+	}
 	println("Password created: " + password)
+	return nil
 }
 
 func ConnectToDB() error {
@@ -103,7 +107,7 @@ func ConnectToDB() error {
 
 	// checking database credentials for empty values
 	if IsDbCredentialEmpty(c.Dbname) || IsDbCredentialEmpty(c.Dbpass) || IsDbCredentialEmpty(c.Dbuser) {
-		err := errors.New("Database credentials were not supplied correctly")
+		err := errors.New("database credentials were not supplied correctly")
 		return err
 	}
 
