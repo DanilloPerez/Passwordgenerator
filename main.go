@@ -88,12 +88,15 @@ func GeneratePass(lengte int) error {
 	//password = "tmpfgrxu"
 
 	// recursion
-	_, exists := CheckForExistingPass(password)
+	err, exists := CheckForExistingPass(password)
+	if err != nil {
+		return err
+	}
 	if exists {
 		GeneratePass(lengte)
 	}
 	// if the password does not exist yet in the database we add it
-	err := AddPass(password)
+	err = AddPass(password)
 	if err != nil {
 		return err
 	}
@@ -152,6 +155,12 @@ func AddPass(password string) error {
 }
 
 func IsDbCredentialEmpty(textValue string) bool {
-	// trim leading and trailing whitespaces from dbcredentials and check length to verify it contains a value
-	return (len(strings.TrimSpace(textValue)) == 0)
+	trimmedTextValue := strings.TrimSpace(textValue)
+	textValueLenght := len(trimmedTextValue)
+	if textValueLenght == 0 {
+		// textValue is empty
+		return true
+	}
+	// textValue contains characters
+	return false
 }
