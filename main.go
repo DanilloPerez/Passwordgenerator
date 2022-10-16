@@ -2,8 +2,10 @@ package main
 
 import (
 	"database/sql"
+	"errors"
 	"flag"
 	"fmt"
+	"log"
 	"math/rand"
 	"os"
 	"strings"
@@ -34,10 +36,16 @@ func init() {
 
 func main() {
 	// connect to database and create required tables
-	ConnectToDB()
+	err := ConnectToDB()
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	// create required tables if they do not yet exist
-	CreateTable()
+	err = CreateTable()
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	// generate password will create a unique password for us and store it in the database
 	GeneratePass(lengte)
@@ -80,62 +88,66 @@ func GeneratePass(lengte int) {
 	//password = "tmpfgrxu"
 
 	// recursion
-	exists := CheckForExistingPass(password)
+	_, exists := CheckForExistingPass(password)
 	if exists {
 		GeneratePass(lengte)
 	}
-
 	// if the password does not exist yet in the database we add it
 	AddPass(password)
 	println("Password created: " + password)
 }
 
-func ConnectToDB() {
+func ConnectToDB() error {
 	var c config
 	c.GetConfig()
 
 	// checking database credentials for empty values
-	if IsEmpty(c.Dbname) || IsEmpty(c.Dbpass) || IsEmpty(c.Dbuser) {
-		panic("Database credentials were not supplied correctly")
+	if IsDbCredentialEmpty(c.Dbname) || IsDbCredentialEmpty(c.Dbpass) || IsDbCredentialEmpty(c.Dbuser) {
+		err := errors.New("Database credentials were not supplied correctly")
+		return err
 	}
 
 	// open connection to database
 	db, err := sql.Open("postgres", "dbname="+c.Dbname+" user="+c.Dbuser+" password="+c.Dbpass+" sslmode=disable")
 	if err != nil {
-		panic("Connection to the database could not be established")
+		return err
 	}
 	database = db
+	return nil
+
 }
 
-func CreateTable() {
+func CreateTable() error {
 	query := `CREATE TABLE IF NOT EXISTS passwords (password varchar(255))`
 	_, err := database.Exec(query)
 	if err != nil {
-		panic("An error occured while creating your table")
+		return err
 	}
+	return nil
 }
 
-func CheckForExistingPass(password string) bool {
+func CheckForExistingPass(password string) (error, bool) {
 	var exists bool
 	query := fmt.Sprintf(`SELECT EXISTS(SELECT 1 FROM passwords WHERE password = '%s')`, password)
 
 	// execute query and bind assign boolean return value to the "exists" variable
 	err := database.QueryRow(query).Scan(&exists)
 	if err != nil {
-		panic("An error occured while saving your password to the database")
+		return err, exists
 	}
-	return exists
+	return nil, exists
 }
 
-func AddPass(password string) {
+func AddPass(password string) error {
 	query := fmt.Sprintf(`INSERT INTO passwords (password)VALUES ('%s')`, password)
 	_, err := database.Exec(query)
 	if err != nil {
-		panic("An error occured while saving your password to the database")
+		return err
 	}
+	return nil
 }
 
-func IsEmpty(textValue string) bool {
-	// trim leading and trailing whitespaces from string and check length to verify it contains a value
+func IsDbCredentialEmpty(textValue string) bool {
+	// trim leading and trailing whitespaces from dbcredentials and check length to verify it contains a value
 	return (len(strings.TrimSpace(textValue)) == 0)
 }
